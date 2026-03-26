@@ -1,0 +1,7 @@
+# pg_rag extension
+comment = 'PostgreSQL RAG Extension - Retrieval-Augmented Generation in SQL'
+default_version = '0.1.0'
+module_pathname = '$libdir/pg_rag'
+relocatable = false
+schema = rag
+trusted = true

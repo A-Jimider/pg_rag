@@ -1,0 +1,42 @@
+# Build artifacts
+*.o
+*.so
+*.a
+*.dylib
+*.dll
+
+# PostgreSQL extension build files
+/results/
+/regression.diffs
+/regression.out
+/deps/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.cproject
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test/temp files
+*.tmp
+/tmp/
+/test_tmp/
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Dependency directories
+/vendor/
+/node_modules/

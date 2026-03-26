@@ -1,0 +1,48 @@
+{
+  "name": "pg_rag",
+  "abstract": "PostgreSQL RAG Extension - Retrieval-Augmented Generation in SQL",
+  "description": "A PostgreSQL extension that enables RAG (Retrieval-Augmented Generation) workflows using pure SQL. Features automatic text chunking, vector similarity search via pgvector, and LLM integration for generating context-aware responses.",
+  "version": "0.1.0",
+  "maintainer": [
+    "A-Jimider <a_jimider@163.com>"
+  ],
+  "license": "Custom",
+  "prereqs": {
+    "runtime": {
+      "requires": {
+        "PostgreSQL": "14.0.0"
+      }
+    }
+  },
+  "provides": {
+    "pg_rag": {
+      "file": "sql/pg_rag--0.1.0.sql",
+      "docfile": "README.md",
+      "version": "0.1.0"
+    }
+  },
+  "resources": {
+    "homepage": "https://github.com/A-Jimider/pg_rag",
+    "bugtracker": {
+      "web": "https://github.com/A-Jimider/pg_rag/issues"
+    },
+    "repository": {
+      "url": "https://github.com/A-Jimider/pg_rag.git",
+      "web": "https://github.com/A-Jimider/pg_rag",
+      "type": "git"
+    }
+  },
+  "generated_by": "A-Jimider",
+  "meta-spec": {
+    "version": "1.0.0",
+    "url": "https://pgxn.org/spec/"
+  },
+  "tags": [
+    "rag",
+    "llm",
+    "embedding",
+    "vector",
+    "search",
+    "ai"
+  ]
+}

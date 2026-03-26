@@ -1,0 +1,308 @@
+-- ============================================
+-- pg_rag regression test
+-- ============================================
+-- This test validates core functionality without requiring external API calls
+-- Load required extensions
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_rag;
+-- ============================================
+-- Test 1: Configuration Management
+-- ============================================
+SELECT '=== Test 1: Configuration Management ===' AS section;
+                 section                  
+------------------------------------------
+ === Test 1: Configuration Management ===
+(1 row)
+
+-- Test setting and getting config values
+SELECT rag.set_config('test_key', 'test_value');
+ set_config 
+------------
+ 
+(1 row)
+
+SELECT rag.get_config('test_key');
+ get_config 
+------------
+ test_value
+(1 row)
+
+-- Test updating existing config
+SELECT rag.set_config('test_key', 'updated_value');
+ set_config 
+------------
+ 
+(1 row)
+
+SELECT rag.get_config('test_key');
+  get_config   
+---------------
+ updated_value
+(1 row)
+
+-- Test getting non-existent config (should return NULL)
+SELECT rag.get_config('non_existent_key');
+ get_config 
+------------
+ 
+(1 row)
+
+-- Test default configs exist
+SELECT key, value FROM rag.config WHERE key != 'test_key' ORDER BY key;
+       key       |                                     value                                     
+-----------------+-------------------------------------------------------------------------------
+ chunk_overlap   | 200
+ chunk_size      | 1200
+ embedding_model | text-embedding-3-small
+ llm_model       | gpt-4o-mini
+ on_error        | skip
+ system_prompt   | You are a helpful assistant. Use the provided context to answer the question.
+ timeout_ms      | 30000
+(7 rows)
+
+-- ============================================
+-- Test 2: Knowledge Base Management
+-- ============================================
+SELECT '=== Test 2: Knowledge Base Management ===' AS section;
+                  section                  
+-------------------------------------------
+ === Test 2: Knowledge Base Management ===
+(1 row)
+
+-- Clean up test KBs if they exist from previous runs
+DELETE FROM rag.documents WHERE kb_id IN (SELECT id FROM rag.knowledge_bases WHERE name LIKE 'test_%');
+DELETE FROM rag.knowledge_bases WHERE name LIKE 'test_%';
+-- Test creating a knowledge base
+SELECT rag.create_kb('test_kb_1') AS kb_id_1;
+ kb_id_1 
+---------
+       1
+(1 row)
+
+-- Test creating KB with custom dimension
+SELECT rag.create_kb('test_kb_2', 768) AS kb_id_2;
+ kb_id_2 
+---------
+       2
+(1 row)
+
+-- Verify KB creation
+SELECT name, embedding_dim FROM rag.knowledge_bases WHERE name LIKE 'test_kb_%' ORDER BY name;
+   name    | embedding_dim 
+-----------+---------------
+ test_kb_1 |          1536
+ test_kb_2 |           768
+(2 rows)
+
+-- Test creating duplicate KB (should fail with unique violation)
+DO $$
+BEGIN
+    PERFORM rag.create_kb('test_kb_1');
+    RAISE NOTICE 'ERROR: Duplicate KB creation should have failed';
+EXCEPTION
+    WHEN unique_violation THEN
+        RAISE NOTICE 'OK: Duplicate KB correctly rejected';
+END $$;
+NOTICE:  OK: Duplicate KB correctly rejected
+-- ============================================
+-- Test 3: Schema and Table Verification
+-- ============================================
+SELECT '=== Test 3: Schema and Table Verification ===' AS section;
+                    section                    
+-----------------------------------------------
+ === Test 3: Schema and Table Verification ===
+(1 row)
+
+-- Verify schema exists
+SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'rag';
+ schema_name 
+-------------
+ rag
+(1 row)
+
+-- Verify tables exist
+SELECT table_name FROM information_schema.tables WHERE table_schema = 'rag' ORDER BY table_name;
+   table_name    
+-----------------
+ config
+ documents
+ knowledge_bases
+(3 rows)
+
+-- Verify columns in knowledge_bases
+SELECT column_name, data_type FROM information_schema.columns
+WHERE table_schema = 'rag' AND table_name = 'knowledge_bases' ORDER BY ordinal_position;
+  column_name  |          data_type          
+---------------+-----------------------------
+ id            | integer
+ name          | text
+ embedding_dim | integer
+ created_at    | timestamp without time zone
+(4 rows)
+
+-- Verify columns in documents (embedding shows as USER-DEFINED)
+SELECT column_name, data_type FROM information_schema.columns
+WHERE table_schema = 'rag' AND table_name = 'documents' ORDER BY ordinal_position;
+  column_name   |          data_type          
+----------------+-----------------------------
+ id             | bigint
+ kb_id          | integer
+ content        | text
+ metadata       | jsonb
+ embedding      | USER-DEFINED
+ chunk_index    | integer
+ source_doc_id  | text
+ token_estimate | integer
+ created_at     | timestamp without time zone
+(9 rows)
+
+-- Verify indexes exist
+SELECT indexname FROM pg_indexes WHERE schemaname = 'rag' ORDER BY indexname;
+        indexname         
+--------------------------
+ config_pkey
+ documents_embedding_idx
+ documents_kb_id_idx
+ documents_pkey
+ knowledge_bases_name_key
+ knowledge_bases_pkey
+(6 rows)
+
+-- ============================================
+-- Test 4: Return Types Verification
+-- ============================================
+SELECT '=== Test 4: Return Types Verification ===' AS section;
+                  section                  
+-------------------------------------------
+ === Test 4: Return Types Verification ===
+(1 row)
+
+-- Verify custom types exist
+SELECT typname FROM pg_type WHERE typname IN ('query_result', 'explain_result') ORDER BY typname;
+    typname     
+----------------
+ explain_result
+ query_result
+(2 rows)
+
+-- Verify composite type structure for query_result
+SELECT a.attname, t.typname
+FROM pg_type ty
+JOIN pg_attribute a ON a.attrelid = ty.typrelid
+JOIN pg_type t ON a.atttypid = t.oid
+WHERE ty.typname = 'query_result' AND a.attnum > 0
+ORDER BY a.attnum;
+  attname   | typname 
+------------+---------
+ answer     | text
+ sources    | jsonb
+ debug      | jsonb
+ latency_ms | int4
+(4 rows)
+
+-- Verify composite type structure for explain_result
+SELECT a.attname, t.typname
+FROM pg_type ty
+JOIN pg_attribute a ON a.attrelid = ty.typrelid
+JOIN pg_type t ON a.atttypid = t.oid
+WHERE ty.typname = 'explain_result' AND a.attnum > 0
+ORDER BY a.attnum;
+     attname      | typname 
+------------------+---------
+ query_embedding  | text
+ retrieved_chunks | jsonb
+ prompt           | text
+ token_estimate   | int4
+ latency_ms       | int4
+(5 rows)
+
+-- ============================================
+-- Test 5: GUC Variables
+-- ============================================
+SELECT '=== Test 5: GUC Variables ===' AS section;
+            section            
+-------------------------------
+ === Test 5: GUC Variables ===
+(1 row)
+
+-- Show GUC settings (without values since they're sensitive)
+SELECT name, setting FROM pg_settings WHERE name LIKE 'rag.%' ORDER BY name;
+         name          |                           setting                            
+-----------------------+--------------------------------------------------------------
+ rag.embedding_api_key | 
+ rag.embedding_api_url | https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings
+ rag.embedding_model   | text-embedding-v4
+ rag.llm_api_key       | 
+ rag.llm_api_url       | https://api.moonshot.cn/v1/chat/completions
+ rag.llm_model         | kimi-k2.5
+ rag.llm_temperature   | 1
+(7 rows)
+
+-- Set GUC values (these are session-level)
+SET rag.embedding_api_url = 'https://test.example.com/embeddings';
+SET rag.llm_api_url = 'https://test.example.com/chat';
+SET rag.llm_temperature = 0.5;
+-- Verify GUC values
+SELECT name, setting FROM pg_settings WHERE name LIKE 'rag.%' ORDER BY name;
+         name          |               setting               
+-----------------------+-------------------------------------
+ rag.embedding_api_key | 
+ rag.embedding_api_url | https://test.example.com/embeddings
+ rag.embedding_model   | text-embedding-v4
+ rag.llm_api_key       | 
+ rag.llm_api_url       | https://test.example.com/chat
+ rag.llm_model         | kimi-k2.5
+ rag.llm_temperature   | 0.5
+(7 rows)
+
+-- Reset GUC values
+RESET rag.embedding_api_url;
+RESET rag.llm_api_url;
+RESET rag.llm_temperature;
+-- ============================================
+-- Test 6: Error Handling - Invalid Inputs
+-- ============================================
+SELECT '=== Test 6: Error Handling ===' AS section;
+            section             
+--------------------------------
+ === Test 6: Error Handling ===
+(1 row)
+
+-- Test query on non-existent knowledge base (should error)
+DO $$
+BEGIN
+    PERFORM rag.explain('non_existent_kb', 'test query', 5);
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Expected error for non-existent KB: %', SQLERRM;
+END $$;
+NOTICE:  Expected error for non-existent KB: Knowledge base 'non_existent_kb' not found
+-- ============================================
+-- Test 7: Cleanup
+-- ============================================
+SELECT '=== Test 7: Cleanup ===' AS section;
+         section         
+-------------------------
+ === Test 7: Cleanup ===
+(1 row)
+
+-- Clean up test data
+DELETE FROM rag.documents WHERE kb_id IN (SELECT id FROM rag.knowledge_bases WHERE name LIKE 'test_%');
+DELETE FROM rag.knowledge_bases WHERE name LIKE 'test_%';
+DELETE FROM rag.config WHERE key = 'test_key';
+-- Verify cleanup
+SELECT COUNT(*) AS remaining_test_kbs FROM rag.knowledge_bases WHERE name LIKE 'test_%';
+ remaining_test_kbs 
+--------------------
+                  0
+(1 row)
+
+-- ============================================
+-- Test Summary
+-- ============================================
+SELECT '=== All regression tests completed ===' AS summary;
+                summary                 
+----------------------------------------
+ === All regression tests completed ===
+(1 row)
+
